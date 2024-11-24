@@ -1,0 +1,52 @@
+.wrapper {
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    padding: 9px 16px;
+    min-width: 100px;
+    font-weight: 500;
+    font-size: 1.6rem;
+    background-color: var(--white-color);
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+}
+
+// .wrapper + .wrapper {
+//     margin: 10px;
+// }
+
+.icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    text-align: center;
+}
+
+.icon + .title,
+.title + .icon {
+    margin-left: 8px;
+}
+
+.primary {
+    background-color: var(--primary-color);
+    color: var(--white-color);
+}
+
+.rounded {
+    border-radius: 20px;
+}
+
+.outline {
+    color: currentColor;
+    border-color: currentColor;
+    background-color: transparent;
+}
+
+.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: default;
+}
