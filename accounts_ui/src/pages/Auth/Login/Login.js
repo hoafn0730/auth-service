@@ -17,10 +17,10 @@ function Login() {
     const [isLoginAccount, setIsLoginAccount] = useState(false);
     const [searchParams] = useSearchParams();
 
-    const handleLogin = () => {
+    const handleLogin = (type) => {
         const serviceURL = searchParams.get('serviceURL');
 
-        const authURL = `${process.env.REACT_APP_BACKEND_SSO_LOGIN}/auth/google?${
+        const authURL = `${process.env.REACT_APP_BACKEND_SSO_LOGIN}/auth/${type}?${
             'serviceURL=' + encodeURIComponent(serviceURL)
         }${searchParams.has('popup') ? '&popup=true' : ''} `;
         if (searchParams.has('popup')) {
@@ -66,7 +66,7 @@ function Login() {
                         rounded
                         outline
                         startIcon={<FontAwesomeIcon icon={faGoogle} />}
-                        onClick={handleLogin}
+                        onClick={() => handleLogin('google')}
                     >
                         Đăng nhập với Google
                     </Button>
@@ -75,10 +75,17 @@ function Login() {
                         rounded
                         outline
                         startIcon={<FontAwesomeIcon icon={faFacebook} />}
+                        onClick={() => handleLogin('facebook')}
                     >
                         Đăng nhập với Facebook
                     </Button>
-                    <Button className={cx('login-btn')} rounded outline startIcon={<FontAwesomeIcon icon={faGithub} />}>
+                    <Button
+                        className={cx('login-btn')}
+                        rounded
+                        outline
+                        startIcon={<FontAwesomeIcon icon={faGithub} />}
+                        onClick={() => handleLogin('github')}
+                    >
                         Đăng nhập với Github
                     </Button>
                 </>

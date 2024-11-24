@@ -37,7 +37,7 @@ app.use(
             // recommended you use this setting in production if you have a well-known domain you want to restrict the cookies to.
             domain: process.env.COOKIE_DOMAIN,
             // recommended you use this setting in production if your site is published using HTTPS
-            secure: true,
+            secure: process.env.COOKIE_DOMAIN !== 'localhost',
         },
     }),
 );
@@ -49,14 +49,7 @@ app.use(errorHandlingMiddleware);
 app.use('/api/v1', require('./v1/routes'));
 
 app.get('/', (req, res) => {
-    res.send(
-        '<h1>Hello World!</h1>',
-        // `<div><h1>Hello world!</h1><a href="http://localhost:3000/login?serviceURL=${encodeURIComponent(
-        //     'http://localhost:8080',
-        // )}">LOGIN</a><br/><a href="http://localhost:8080/api/v1/auth/logout?serviceURL=${encodeURIComponent(
-        //     'http://localhost:8080',
-        // )}">LOGOUT</a></div>`,
-    );
+    res.send('<h1>Hello World!</h1>\n<a href="' + process.env.BACKEND_SSO + '">Back to login</a>');
 });
 
 module.exports = app;

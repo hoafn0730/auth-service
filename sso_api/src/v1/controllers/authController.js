@@ -7,7 +7,7 @@ const db = require('../models');
 const ApiError = require('../utils/ApiError');
 
 const login = (req, res, next) => {
-    const serviceURL = req.query.serviceURL;
+    const redirectUrl = req.query.serviceURL;
     const isPopup = req.query.popup === 'true' && true;
 
     passport.authenticate('local', (err, user, info) => {
@@ -38,8 +38,8 @@ const login = (req, res, next) => {
             // Đặt Access Token vào cookie
             res.cookie('accessToken', accessToken, {
                 httpOnly: true,
-                secure: true,
-                sameSite: 'Strict',
+                secure: process.env.COOKIE_DOMAIN !== 'localhost',
+                sameSite: process.env.COOKIE_DOMAIN === 'localhost' ? 'Lax' : 'None',
                 domain: process.env.COOKIE_DOMAIN,
                 maxAge: 15 * 60 * 1000,
             });
@@ -47,21 +47,69 @@ const login = (req, res, next) => {
             // Đặt Refresh Token vào cookie
             res.cookie('refreshToken', refreshToken, {
                 httpOnly: true,
-                secure: true,
-                sameSite: 'Strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000,
+                secure: process.env.COOKIE_DOMAIN !== 'localhost',
+                sameSite: process.env.COOKIE_DOMAIN === 'localhost' ? 'Lax' : 'None',
                 domain: process.env.COOKIE_DOMAIN,
+                maxAge: 7 * 24 * 60 * 60 * 1000,
             });
 
             if (isPopup) {
                 return res.redirect(process.env.BACKEND_SSO + '/reload');
-            } else if (serviceURL && serviceURL !== 'null') {
-                return res.redirect(serviceURL);
+            } else if (redirectUrl && redirectUrl !== 'null') {
+                return res.status(StatusCodes.OK).json({ statusCode: StatusCodes.OK, message: 'login success' });
             } else {
                 return res.redirect(process.env.BACKEND_SSO);
             }
         });
     })(req, res, next);
+};
+
+const loginSocial = async (req, res, next) => {
+    try {
+        const redirectUrl = decodeURIComponent(req.query.state.split(',')[0]);
+        const isPopup = req.query.state.split(',')[1] === 'true' && true;
+
+        const payload = {
+            id: req.user.id,
+            email: req.user.email,
+            username: req.user.username,
+        };
+
+        // Tạo Access Token và Refresh Token
+        const accessToken = jwtService.createToken(payload);
+        const refreshToken = uuidv4();
+
+        await authService.updateUserCode(req.user.type, req.user.email, refreshToken);
+
+        // Đặt Access Token vào cookie
+        res.cookie('accessToken', accessToken, {
+            httpOnly: true, // Không cho phép truy cập cookie từ JavaScript
+            secure: process.env.COOKIE_DOMAIN !== 'localhost',
+            sameSite: process.env.COOKIE_DOMAIN === 'localhost' ? 'Lax' : 'None',
+            domain: process.env.COOKIE_DOMAIN,
+            // maxAge: 24 * 60 * 60 * 1000, // (24h)
+            maxAge: 15 * 60 * 1000, // (15 phút)
+        });
+
+        // Đặt Refresh Token vào cookie
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.COOKIE_DOMAIN !== 'localhost',
+            sameSite: process.env.COOKIE_DOMAIN === 'localhost' ? 'Lax' : 'None',
+            domain: process.env.COOKIE_DOMAIN,
+            maxAge: 7 * 24 * 60 * 60 * 1000, // (1 tuần)
+        });
+
+        if (isPopup) {
+            return res.redirect(process.env.BACKEND_SSO + '/reload');
+        } else if (redirectUrl && redirectUrl !== 'null') {
+            return res.redirect(redirectUrl);
+        } else {
+            return res.redirect(process.env.BACKEND_SSO);
+        }
+    } catch (error) {
+        next(error);
+    }
 };
 
 const signup = async (req, res, next) => {
@@ -73,7 +121,7 @@ const signup = async (req, res, next) => {
             next(data);
         }
 
-        return res.redirect(process.env.BACKEND_SSO_LOGIN + '?serviceURL=' + serviceURL);
+        return res.redirect(process.env.BACKEND_SSO + '/login?serviceURL=' + serviceURL);
     } catch (error) {
         next(error);
     }
@@ -82,9 +130,10 @@ const signup = async (req, res, next) => {
 const logout = async (req, res, next) => {
     req.logout((err) => {
         if (err) return next(err);
-        res.clearCookie('accessToken', { domain: process.env.COOKIE_DOMAIN });
-        res.clearCookie('refreshToken', { domain: process.env.COOKIE_DOMAIN });
-        res.clearCookie('connect.sid', { domain: process.env.COOKIE_DOMAIN });
+        // domain: process.env.COOKIE_DOMAIN
+        res.clearCookie('accessToken', {});
+        res.clearCookie('refreshToken', {});
+        res.clearCookie('connect.sid', {});
         req.session.destroy();
 
         res.json({ statusCode: StatusCodes.OK, message: StatusCodes[StatusCodes.OK] });
@@ -138,54 +187,6 @@ const verifyServices = async (req, res, next) => {
     }
 };
 
-const loginSocial = async (req, res, next) => {
-    try {
-        const serviceURL = decodeURIComponent(req.query.state.split(',')[0]);
-        const isPopup = req.query.state.split(',')[1] === 'true' && true;
-
-        const payload = {
-            id: req.user.id,
-            email: req.user.email,
-            username: req.user.username,
-        };
-
-        // Tạo Access Token và Refresh Token
-        const accessToken = jwtService.createToken(payload);
-        const refreshToken = uuidv4();
-
-        await authService.updateUserCode(req.user.type, req.user.email, refreshToken);
-
-        // Đặt Access Token vào cookie
-        res.cookie('accessToken', accessToken, {
-            httpOnly: true, // Không cho phép truy cập cookie từ JavaScript
-            secure: true, // Chỉ gửi cookie qua HTTPS
-            sameSite: 'Strict', // Ngăn chặn tấn công CSRF
-            domain: process.env.COOKIE_DOMAIN,
-            // maxAge: 24 * 60 * 60 * 1000, // (24h)
-            maxAge: 15 * 60 * 1000, // (15 phút)
-        });
-
-        // Đặt Refresh Token vào cookie
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'Strict',
-            domain: process.env.COOKIE_DOMAIN,
-            maxAge: 7 * 24 * 60 * 60 * 1000, // (1 tuần)
-        });
-
-        if (isPopup) {
-            return res.redirect(process.env.BACKEND_SSO + '/reload');
-        } else if (serviceURL && serviceURL !== 'null') {
-            return res.redirect(serviceURL);
-        } else {
-            return res.redirect(process.env.BACKEND_SSO);
-        }
-    } catch (error) {
-        next(error);
-    }
-};
-
 const refreshToken = async (req, res, next) => {
     try {
         const refreshToken = req.cookies.refreshToken; // Lấy Refresh Token từ cookie
@@ -208,18 +209,18 @@ const refreshToken = async (req, res, next) => {
 
             res.cookie('accessToken', newAccessToken, {
                 httpOnly: true,
-                secure: true,
-                sameSite: 'Strict',
-                maxAge: 15 * 60 * 1000,
+                secure: process.env.COOKIE_DOMAIN !== 'localhost',
+                sameSite: process.env.COOKIE_DOMAIN === 'localhost' ? 'Lax' : 'None',
                 domain: process.env.COOKIE_DOMAIN,
+                maxAge: 15 * 60 * 1000,
             });
 
             res.cookie('refreshToken', newRefreshToken, {
                 httpOnly: true,
-                secure: true,
-                sameSite: 'Strict',
-                maxAge: 15 * 60 * 1000,
+                secure: process.env.COOKIE_DOMAIN !== 'localhost',
+                sameSite: process.env.COOKIE_DOMAIN === 'localhost' ? 'Lax' : 'None',
                 domain: process.env.COOKIE_DOMAIN,
+                maxAge: 15 * 60 * 1000,
             });
             return res.status(StatusCodes.OK).json({
                 statusCode: StatusCodes.OK,

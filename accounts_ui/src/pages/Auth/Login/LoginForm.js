@@ -3,6 +3,7 @@ import classNames from 'classnames/bind';
 import Button from '~/components/Button';
 import Form from '~/components/Form';
 import { useSearchParams } from 'react-router-dom';
+import axios from 'axios';
 
 import styles from './Login.module.scss';
 const cx = classNames.bind(styles);
@@ -20,14 +21,28 @@ function LoginForm() {
         setIsError(true);
     };
 
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await axios.post(
+                `${process.env.REACT_APP_BACKEND_SSO_LOGIN}/auth/login?serviceURL=${
+                    searchParams.has('serviceURL') ? encodeURIComponent(searchParams.get('serviceURL')) : null
+                }${searchParams.has('popup') ? '&popup=' + searchParams.get('popup') : ''}`,
+                { email: formValue.email, password: formValue.password },
+                { withCredentials: true },
+            );
+
+            if (res.data.statusCode === 200) {
+                window.location.href = searchParams.get('serviceURL');
+            }
+        } catch (error) {
+            console.log('🚀 ~ handleSubmit ~ error:', error);
+        }
+    };
+
     return (
         <>
-            <Form
-                action={`${process.env.REACT_APP_BACKEND_SSO_LOGIN}/auth/login?serviceURL=${
-                    searchParams.has('serviceURL') ? encodeURIComponent(searchParams.get('serviceURL')) : null
-                }${searchParams.has('popup') && '&popup=' + searchParams.get('popup')}`}
-                method={'POST'}
-            >
+            <Form onSubmit={handleSubmit}>
                 <Form.Group>
                     <Form.Label label={'Tên đăng nhập'} />
                     <Form.Control

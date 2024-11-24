@@ -4,6 +4,7 @@ import { useState } from 'react';
 import classNames from 'classnames/bind';
 import Button from '~/components/Button';
 import Form from '~/components/Form';
+import axios from 'axios';
 import { Link, useSearchParams } from 'react-router-dom';
 import styles from './Register.module.scss';
 
@@ -17,16 +18,33 @@ function Register() {
         setFormValue((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await axios.post(
+                process.env.REACT_APP_BACKEND_SSO_LOGIN +
+                    '/auth/signup?serviceURL=' +
+                    encodeURIComponent(searchParams.get('serviceURL')),
+                {
+                    email: formValue.email,
+                    username: formValue.username,
+                    password: formValue.password,
+                    repeatPassword: formValue.password,
+                },
+                { withCredentials: true },
+            );
+
+            if (res.data.statusCode === 200) {
+                window.location.href = searchParams.get('serviceURL');
+            }
+        } catch (error) {
+            console.log('🚀 ~ handleSubmit ~ error:', error);
+        }
+    };
+
     return (
         <Auth>
-            <Form
-                action={
-                    process.env.REACT_APP_BACKEND_SSO_LOGIN +
-                    '/auth/signup?serviceURL=' +
-                    encodeURIComponent(searchParams.get('serviceURL'))
-                }
-                method={'POST'}
-            >
+            <Form onSubmit={handleSubmit}>
                 <Form.Group>
                     <Form.Label label={'Email'} />
                     <Form.Control
