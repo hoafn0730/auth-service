@@ -27,7 +27,7 @@ passport.use(
                 attributes: { exclude: ['password', 'role', 'code'] },
             });
 
-            return cb(null, user);
+            return cb(null, { ...user, deviceId: req.headers['user-agent'] });
         },
     ),
 );

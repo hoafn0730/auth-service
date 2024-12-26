@@ -1,39 +1,38 @@
-import { useState } from 'react';
 import classNames from 'classnames/bind';
+import { useForm } from 'react-hook-form';
+import { useSearchParams } from 'react-router-dom';
+
 import Button from '~/components/Button';
 import Form from '~/components/Form';
-import { useSearchParams } from 'react-router-dom';
-import axios from 'axios';
-
 import styles from './Login.module.scss';
+import authService from '~/services/authService';
+import {
+    EMAIL_RULE,
+    EMAIL_RULE_MESSAGE,
+    FIELD_REQUIRED_MESSAGE,
+    PASSWORD_RULE,
+    PASSWORD_RULE_MESSAGE,
+} from '~/utils/validators';
 const cx = classNames.bind(styles);
 
 function LoginForm() {
-    const [formValue, setFormValue] = useState({ email: '', password: '' });
-    const [isError, setIsError] = useState(false);
+    const {
+        register,
+        handleSubmit,
+        formState: { errors },
+    } = useForm();
     const [searchParams] = useSearchParams();
+    const { continue: serviceURL, popup } = Object.fromEntries([...searchParams]);
 
-    const handleChangeFormValue = (e) => {
-        setFormValue((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    };
-
-    const handleFocusInput = () => {
-        setIsError(true);
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const submitForm = async (data) => {
         try {
-            const res = await axios.post(
-                `${process.env.REACT_APP_BACKEND_SSO_LOGIN}/auth/login?serviceURL=${
-                    searchParams.has('serviceURL') ? encodeURIComponent(searchParams.get('serviceURL')) : null
-                }${searchParams.has('popup') ? '&popup=' + searchParams.get('popup') : ''}`,
-                { email: formValue.email, password: formValue.password },
-                { withCredentials: true },
+            const res = await authService.login(
+                { email: data.email, password: data.password },
+                { continue: encodeURIComponent(serviceURL), popup: popup },
             );
 
-            if (res.data.statusCode === 200) {
-                window.location.href = searchParams.get('serviceURL');
+            if (res.statusCode === 200) {
+                window.location.href = serviceURL;
             }
         } catch (error) {
             console.log('🚀 ~ handleSubmit ~ error:', error);
@@ -42,27 +41,35 @@ function LoginForm() {
 
     return (
         <>
-            <Form onSubmit={handleSubmit}>
+            <Form onSubmit={handleSubmit(submitForm)}>
                 <Form.Group>
-                    <Form.Label label={'Tên đăng nhập'} />
+                    <Form.Label label={'Email'} />
                     <Form.Control
-                        value={formValue.email}
-                        name={'email'}
+                        type="email"
                         placeholder={'Email'}
-                        invalid={!formValue.email && isError && { message: 'Không được để trống!' }}
-                        onChange={handleChangeFormValue}
-                        onFocus={handleFocusInput}
+                        error={errors['email']}
+                        {...register('email', {
+                            required: FIELD_REQUIRED_MESSAGE,
+                            pattern: {
+                                value: EMAIL_RULE,
+                                message: EMAIL_RULE_MESSAGE,
+                            },
+                        })}
                     />
                 </Form.Group>
                 <Form.Group>
-                    <Form.Label label={'Mật khẩu'} />
+                    <Form.Label label={'Password'} />
                     <Form.Control
-                        value={formValue.password}
-                        name={'password'}
-                        placeholder={'Mật khẩu'}
-                        invalid={!formValue.email && isError && { message: 'Không được để trống!' }}
-                        onFocus={handleFocusInput}
-                        onChange={handleChangeFormValue}
+                        type="password"
+                        placeholder={'Password'}
+                        error={errors['password']}
+                        {...register('password', {
+                            required: FIELD_REQUIRED_MESSAGE,
+                            pattern: {
+                                value: PASSWORD_RULE,
+                                message: PASSWORD_RULE_MESSAGE,
+                            },
+                        })}
                     />
                 </Form.Group>
                 <Form.Group
@@ -73,7 +80,7 @@ function LoginForm() {
                 >
                     <Form.Check name={'remember'} type={'checkbox'} label={'Ghi nhớ đăng nhập'} />
                 </Form.Group>
-                <Button primary rounded className={cx('submitBtn')}>
+                <Button type="submit" primary rounded className={cx('submitBtn')}>
                     Đăng nhập
                 </Button>
             </Form>

@@ -1,12 +1,11 @@
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../models');
+const { profileService } = require('./profileService');
 const salt = bcrypt.genSaltSync(10);
 
 const doHashPassword = (password) => {
-    const hashedPassword = bcrypt.hashSync(password, salt);
-
-    return hashedPassword;
+    return bcrypt.hashSync(password, salt);
 };
 
 const checkEmailExist = async (email) => {
@@ -62,17 +61,19 @@ const signup = async (data) => {
 
         const hashPassword = doHashPassword(data.password);
 
-        await db.User.create({
+        const user = await db.User.create({
             email: data.email,
             username: data.username,
             password: hashPassword,
             fullName: data.username,
             role: 'user',
+            code: uuidv4(),
         });
 
         return {
             statusCode: 0,
             message: 'A user is created successfully!',
+            data: user,
         };
     } catch (error) {
         throw error;
@@ -84,7 +85,7 @@ const updateUserCode = async (type, email, token) => {
         await db.User.update(
             { code: token },
             {
-                where: { email: email, type },
+                where: { email, type },
             },
         );
     } catch (error) {
@@ -92,4 +93,18 @@ const updateUserCode = async (type, email, token) => {
     }
 };
 
-module.exports = { login, signup, updateUserCode };
+const verifyAccount = async (type, email) => {
+    try {
+        const user = profileService.getOne({ where: { type, email, active: false } });
+
+        user.active = true;
+
+        await user.save();
+
+        return { message: 'User is already verified!', data: user };
+    } catch (error) {
+        throw error;
+    }
+};
+
+module.exports.authService = { login, signup, updateUserCode, verifyAccount };

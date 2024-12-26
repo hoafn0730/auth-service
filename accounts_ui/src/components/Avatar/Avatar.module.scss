@@ -1,0 +1,17 @@
+.wrapper {
+    background: transparent;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    font-size: var(--font-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.img {
+    border-radius: 50%;
+    height: 9em;
+    width: 9em;
+    object-fit: cover;
+}

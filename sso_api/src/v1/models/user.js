@@ -23,6 +23,7 @@ module.exports = (sequelize, DataTypes) => {
             role: DataTypes.STRING,
             type: DataTypes.STRING,
             code: DataTypes.STRING,
+            active: DataTypes.BOOLEAN,
         },
         {
             sequelize,

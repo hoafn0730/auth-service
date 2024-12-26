@@ -1,35 +1,28 @@
 const { StatusCodes } = require('http-status-codes');
-const jwtService = require('../services/jwtService');
 const ApiError = require('../utils/ApiError');
+const JwtProvider = require('../providers/JwtProvider');
 
-const nonSecurePaths = ['/logout', '/login', '/register', '/verify-services'];
-
+// isAuthorized
 const authMiddleware = async (req, res, next) => {
+    const { accessToken } = req.cookies;
+    const tokenFromHeader = JwtProvider.extractToken(req.headers.authorization);
+
+    if (!(accessToken || tokenFromHeader)) {
+        return next(new ApiError(StatusCodes.UNAUTHORIZED), StatusCodes[StatusCodes.UNAUTHORIZED]);
+    }
+
     try {
-        if (nonSecurePaths.includes(req.path)) return next();
+        const token = accessToken || tokenFromHeader;
+        const decoded = JwtProvider.verifyToken(token);
 
-        const cookies = req.cookies;
-        const tokenFromHeader = jwtService.extractToken(req.headers.authorization);
-
-        if (cookies?.accessToken || tokenFromHeader) {
-            const token = cookies?.accessToken || tokenFromHeader;
-            const decoded = jwtService.verifyToken(token);
-
-            if (decoded && decoded !== 'TokenExpiredError') {
-                req.user = decoded;
-                next();
-            } else if (decoded && decoded === 'TokenExpiredError' && cookies?.refreshToken) {
-                next(new ApiError(StatusCodes.METHOD_NOT_ALLOWED), 'TokenExpiredError & Need to retry new token');
-            } else {
-                next(new ApiError(StatusCodes.UNAUTHORIZED), StatusCodes[StatusCodes.UNAUTHORIZED]);
-            }
-        } else if (!cookies?.accessToken && cookies?.refreshToken) {
-            next(new ApiError(StatusCodes.METHOD_NOT_ALLOWED), 'TokenExpiredError & Need to retry new token');
-        } else {
-            next(new ApiError(StatusCodes.UNAUTHORIZED), StatusCodes[StatusCodes.UNAUTHORIZED]);
-        }
+        req.user = decoded;
+        next();
     } catch (error) {
-        next(error);
+        if (error?.message?.includes('jwt expired')) {
+            return next(new ApiError(StatusCodes.GONE, 'Need to refresh token.'));
+        }
+
+        next(new ApiError(StatusCodes.UNAUTHORIZED, StatusCodes[StatusCodes.UNAUTHORIZED]));
     }
 };
 
@@ -43,11 +36,11 @@ const checkPermission = async (req, res, next) => {
 
 const checkUserLogin = async (req, res, next) => {
     const cookies = req.cookies;
-    const tokenFromHeader = jwtService.extractToken(req.headers.authorization + '');
+    const tokenFromHeader = JwtProvider.extractToken(req.headers.authorization + '');
 
     if (cookies?.accessToken || tokenFromHeader) {
         const token = cookies?.accessToken || tokenFromHeader;
-        const decoded = jwtService.verifyToken(token);
+        const decoded = JwtProvider.verifyToken(token);
         req.user = decoded;
     }
     next();

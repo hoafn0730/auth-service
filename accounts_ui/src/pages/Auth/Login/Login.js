@@ -1,29 +1,28 @@
-import classnames from 'classnames/bind';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser } from '@fortawesome/free-regular-svg-icons';
-import { faFacebook, faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
 import { useState } from 'react';
+import classnames from 'classnames/bind';
 import { Link, useSearchParams } from 'react-router-dom';
+import { faUser } from '@fortawesome/free-regular-svg-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronLeft } from '@fortawesome/free-solid-svg-icons';
+import { faFacebook, faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
 
-import styles from './Login.module.scss';
-import LoginForm from './LoginForm';
-import Button from '~/components/Button';
 import Auth from '../Auth';
+import LoginForm from './LoginForm';
+import styles from './Login.module.scss';
+import Button from '~/components/Button';
 
 const cx = classnames.bind(styles);
 
 function Login() {
-    const [isLoginAccount, setIsLoginAccount] = useState(false);
     const [searchParams] = useSearchParams();
+    const { continue: serviceURL, popup } = Object.fromEntries([...searchParams]);
+    const [isLoginAccount, setIsLoginAccount] = useState(false);
 
     const handleLogin = (type) => {
-        const serviceURL = searchParams.get('serviceURL');
-
-        const authURL = `${process.env.REACT_APP_BACKEND_SSO_LOGIN}/auth/${type}?${
-            'serviceURL=' + encodeURIComponent(serviceURL)
-        }${searchParams.has('popup') ? '&popup=true' : ''} `;
-        if (searchParams.has('popup')) {
+        const authURL = `${process.env.REACT_APP_BACKEND_SSO_URL}/auth/${type}?${
+            'continue=' + encodeURIComponent(serviceURL)
+        }${popup ? '&popup=true' : ''} `;
+        if (popup) {
             const windowFeatures = 'width=1000,height=600,left=100,top=100';
             const newWindow = window.open(authURL, '_blank', windowFeatures);
 
@@ -91,8 +90,7 @@ function Login() {
                 </>
             )}
             <p className={cx('dontHaveAcc')}>
-                Bạn chưa có tài khoản?{' '}
-                <Link to={'/register?serviceURL=' + encodeURIComponent(searchParams.get('serviceURL'))}>Đăng ký</Link>
+                Bạn chưa có tài khoản? <Link to={'/register?continue=' + encodeURIComponent(serviceURL)}>Đăng ký</Link>
             </p>
             <p className={cx('forgotPassword')}>Quên mật khẩu?</p>
         </Auth>

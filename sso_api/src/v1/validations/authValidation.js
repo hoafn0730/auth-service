@@ -38,7 +38,25 @@ const signup = async (req, res, next) => {
     }
 };
 
+const verifyAccount = async (req, res, next) => {
+    const correctCondition = Joi.object({
+        email: Joi.string()
+            .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net'] } })
+            .required(),
+        // token: Joi.string().min(6).max(50).required(),
+    });
+
+    try {
+        await correctCondition.validateAsync(req.body, { abortEarly: false });
+
+        next();
+    } catch (error) {
+        next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, new Error(error).message));
+    }
+};
+
 module.exports = {
     login,
     signup,
+    verifyAccount,
 };

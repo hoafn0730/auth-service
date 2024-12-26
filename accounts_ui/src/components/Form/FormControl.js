@@ -1,25 +1,16 @@
 import classnames from 'classnames/bind';
-
+import { forwardRef } from 'react';
 import styles from './Form.module.scss';
 
 const cx = classnames.bind(styles);
 
-function FormControl({ value, name, type, placeholder, invalid, onChange, onFocus, ...props }) {
+function FormControl({ type, placeholder, error, ...props }, ref) {
     return (
         <>
-            <input
-                className={cx('control')}
-                value={value}
-                name={name}
-                type={type}
-                placeholder={placeholder}
-                onChange={onChange}
-                onFocus={onFocus}
-                {...props}
-            />
-            {invalid && <div className={cx('message')}>{invalid.message}</div>}
+            <input ref={ref} className={cx('control')} type={type} placeholder={placeholder} {...props} />
+            {error && <div className={cx('message')}>{error.message}</div>}
         </>
     );
 }
 
-export default FormControl;
+export default forwardRef(FormControl);

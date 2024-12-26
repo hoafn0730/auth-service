@@ -1,0 +1,62 @@
+.wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.label {
+    font-size: 1.6rem;
+    margin-bottom: 16px;
+    font-weight: 500;
+}
+
+.body {
+    display: flex;
+}
+
+.desc {
+    color: #757575;
+    font-size: 1.4rem;
+    line-height: 2rem;
+    max-width: 500px;
+}
+
+.avatar {
+    position: relative;
+    margin-left: 120px;
+    border-radius: 50%;
+    height: 80px;
+    overflow: hidden;
+    width: 80px;
+    cursor: pointer;
+}
+
+.chooseAva {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.54);
+    height: 80px;
+    width: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    input {
+        bottom: 28px;
+        opacity: 0;
+        position: absolute;
+        width: 0;
+    }
+
+    &:hover .icon {
+        opacity: 1;
+    }
+}
+
+.icon {
+    color: #fff;
+    font-size: 3.6rem;
+    opacity: 0.5;
+    width: 75%;
+}

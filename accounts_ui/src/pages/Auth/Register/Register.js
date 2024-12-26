@@ -1,41 +1,45 @@
 import React from 'react';
 import Auth from '../Auth';
-import { useState } from 'react';
 import classNames from 'classnames/bind';
 import Button from '~/components/Button';
 import Form from '~/components/Form';
-import axios from 'axios';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import styles from './Register.module.scss';
+import { useForm } from 'react-hook-form';
+import {
+    EMAIL_RULE,
+    EMAIL_RULE_MESSAGE,
+    FIELD_REQUIRED_MESSAGE,
+    PASSWORD_CONFIRMATION_MESSAGE,
+    PASSWORD_RULE,
+    PASSWORD_RULE_MESSAGE,
+} from '~/utils/validators';
+import authService from '~/services/authService';
 
 const cx = classNames.bind(styles);
 
 function Register() {
-    const [formValue, setFormValue] = useState({ email: '', username: '', password: '', repeatPassword: '' });
+    const {
+        register,
+        handleSubmit,
+        watch,
+        formState: { errors },
+    } = useForm();
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { continue: serviceURL } = Object.fromEntries([...searchParams]);
 
-    const handleChangeFormValue = (e) => {
-        setFormValue((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const submitForm = async (data) => {
         try {
-            const res = await axios.post(
-                process.env.REACT_APP_BACKEND_SSO_LOGIN +
-                    '/auth/signup?serviceURL=' +
-                    encodeURIComponent(searchParams.get('serviceURL')),
-                {
-                    email: formValue.email,
-                    username: formValue.username,
-                    password: formValue.password,
-                    repeatPassword: formValue.password,
-                },
-                { withCredentials: true },
-            );
+            const res = await authService.signup({
+                email: data.email,
+                username: data.username,
+                password: data.password,
+                repeatPassword: data.password,
+            });
 
-            if (res.data.statusCode === 200) {
-                window.location.href = searchParams.get('serviceURL');
+            if (res.statusCode === 201) {
+                navigate('/login?continue=' + serviceURL);
             }
         } catch (error) {
             console.log('🚀 ~ handleSubmit ~ error:', error);
@@ -44,65 +48,71 @@ function Register() {
 
     return (
         <Auth>
-            <Form onSubmit={handleSubmit}>
+            <Form onSubmit={handleSubmit(submitForm)}>
                 <Form.Group>
                     <Form.Label label={'Email'} />
                     <Form.Control
-                        value={formValue.email}
                         name={'email'}
                         placeholder={'Email'}
-                        onChange={handleChangeFormValue}
+                        error={errors['email']}
+                        {...register('email', {
+                            required: FIELD_REQUIRED_MESSAGE,
+                            pattern: {
+                                value: EMAIL_RULE,
+                                message: EMAIL_RULE_MESSAGE,
+                            },
+                        })}
                     />
                 </Form.Group>
                 <Form.Group>
-                    <Form.Label label={'Tên tài khoản'} />
+                    <Form.Label label={'Username'} />
                     <Form.Control
-                        value={formValue.username}
                         name={'username'}
-                        placeholder={'Tên tài khoản'}
-                        onChange={handleChangeFormValue}
+                        placeholder={'Username'}
+                        error={errors['username']}
+                        {...register('username', {
+                            required: FIELD_REQUIRED_MESSAGE,
+                        })}
                     />
                 </Form.Group>
                 <Form.Group>
-                    <Form.Label label={'Mật khẩu'} />
+                    <Form.Label label={'Password'} />
                     <Form.Control
-                        value={formValue.password}
+                        type={'password'}
                         name={'password'}
-                        placeholder={'Mật khẩu'}
-                        onChange={handleChangeFormValue}
+                        placeholder={'Password'}
+                        error={errors['password']}
+                        {...register('password', {
+                            required: FIELD_REQUIRED_MESSAGE,
+                            pattern: {
+                                value: PASSWORD_RULE,
+                                message: PASSWORD_RULE_MESSAGE,
+                            },
+                        })}
                     />
                 </Form.Group>
                 <Form.Group>
-                    <Form.Label label={'Nhập lại mật khẩu'} />
+                    <Form.Label label={'Repeat password'} />
                     <Form.Control
-                        value={formValue.repeatPassword}
+                        type={'password'}
                         name={'repeatPassword'}
-                        placeholder={'Nhập lại mật khẩu'}
-                        invalid={
-                            formValue.password !== formValue.repeatPassword && { message: 'Bạn nhập lại sai mật khẩu' }
-                        }
-                        onChange={handleChangeFormValue}
+                        placeholder={'Enter repeat password'}
+                        error={errors['repeatPassword']}
+                        {...register('repeatPassword', {
+                            validate: (value) => {
+                                return value === watch('password') ? true : PASSWORD_CONFIRMATION_MESSAGE;
+                            },
+                        })}
                     />
                 </Form.Group>
 
-                <Button
-                    primary
-                    rounded
-                    disabled={
-                        !formValue.email ||
-                        !formValue.username ||
-                        !formValue.password ||
-                        !formValue.repeatPassword ||
-                        formValue.password !== formValue.repeatPassword
-                    }
-                    className={cx('submitBtn')}
-                >
+                <Button type="submit" primary rounded disabled={true} className={cx('submitBtn')}>
                     Đăng ký
                 </Button>
             </Form>
             <p className={cx('haveAcc')}>
                 Bạn đã có tài khoản?{' '}
-                <Link to={'/login?serviceURL=' + encodeURIComponent(searchParams.get('serviceURL'))}>Đăng nhập</Link>
+                <Link to={'/login?continue=' + encodeURIComponent(searchParams.get('continue'))}>Đăng nhập</Link>
             </p>
         </Auth>
     );

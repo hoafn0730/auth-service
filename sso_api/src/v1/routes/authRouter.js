@@ -9,16 +9,22 @@ require('../controllers/passportController/passportGoogle');
 require('../controllers/passportController/passportFacebook');
 require('../controllers/passportController/passportGithub');
 
+router.get('/current-user', authMiddleware, authController.getCurrentUser);
 router.post('/login', authValidation.login, authController.login);
 router.post('/signup', authValidation.signup, authController.signup);
-router.get('/logout', authController.logout);
-router.post('/verify', authController.verifyServices);
+router.post('/verify', authMiddleware, authController.verifyServices);
 router.post('/refresh-token', authController.refreshToken);
-router.get('/current-user', authMiddleware, authController.getCurrentUser);
+router.patch('/verify-account', authValidation.verifyAccount, authController.verifyAccount);
+router.delete('/logout', authController.logout);
+
+router.get('/opt/generate', authMiddleware, authController.generate2FaQrCode);
+router.post('/otp/verify', authMiddleware, authController.setup2FA);
+router.put('/otp/validate', authController.verify2fa);
+router.post('/otp/disable', authMiddleware, authController.disable2FA);
 
 // GET /auth/google
 router.get('/google', (req, res, next) => {
-    const redirectUrl = req.query.serviceURL;
+    const redirectUrl = req.query.continue;
     const isPopup = !!req.query.popup;
 
     const state = encodeURIComponent(redirectUrl) + ',' + isPopup;
@@ -34,7 +40,7 @@ router.get(
 
 // GET /auth/facebook
 router.get('/facebook', (req, res, next) => {
-    const redirectUrl = req.query.serviceURL;
+    const redirectUrl = req.query.continue;
     const isPopup = !!req.query.popup;
 
     const state = encodeURIComponent(redirectUrl) + ',' + isPopup;
@@ -50,7 +56,7 @@ router.get(
 
 // GET /auth/github
 router.get('/github', (req, res, next) => {
-    const redirectUrl = req.query.serviceURL;
+    const redirectUrl = req.query.continue;
     const isPopup = !!req.query.popup;
 
     const state = encodeURIComponent(redirectUrl) + ',' + isPopup;

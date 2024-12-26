@@ -1,9 +1,9 @@
 import classnames from 'classnames/bind';
 import { faCircleNodes } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { Link, useLocation } from 'react-router-dom';
 
 import styles from './Auth.module.scss';
-import { Link, useLocation } from 'react-router-dom';
 
 const cx = classnames.bind(styles);
 
