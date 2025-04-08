@@ -106,7 +106,13 @@ function Register() {
                     />
                 </Form.Group>
 
-                <Button type="submit" primary rounded disabled={true} className={cx('submitBtn')}>
+                <Button
+                    type="submit"
+                    primary
+                    rounded
+                    disabled={!!Object.keys(errors).length}
+                    className={cx('submitBtn')}
+                >
                     Đăng ký
                 </Button>
             </Form>

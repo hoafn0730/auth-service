@@ -23,7 +23,8 @@ module.exports = (sequelize, DataTypes) => {
             role: DataTypes.STRING,
             type: DataTypes.STRING,
             code: DataTypes.STRING,
-            active: DataTypes.BOOLEAN,
+            // active: { type: DataTypes.BOOLEAN, defaultValue: false },
+            // require2FA: { type: DataTypes.BOOLEAN, defaultValue: false },
         },
         {
             sequelize,

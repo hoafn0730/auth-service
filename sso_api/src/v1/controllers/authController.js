@@ -7,13 +7,12 @@ const QRCode = require('qrcode');
 
 const db = require('../models');
 const ApiError = require('../utils/ApiError');
-const JwtProvider = require('../providers/JwtProvider');
 const { authService } = require('../services/authService');
-const { BrevoProvider } = require('../providers/BrevoProvider');
+const JwtProvider = require('../providers/JwtProvider');
+const BrevoProvider = require('../providers/BrevoProvider');
 
 const login = (req, res, next) => {
-    const redirectUrl = req.query.continue;
-    const isPopup = req.query.popup === 'true' && true;
+    const isPopup = req.query.popup === '1';
 
     passport.authenticate('local', (err, user, info) => {
         if (err) {
@@ -37,7 +36,6 @@ const login = (req, res, next) => {
 
             const accessToken = JwtProvider.createToken(payload);
             const refreshToken = uuidv4();
-
             await authService.updateUserCode(req.user.type, req.user.email, refreshToken);
 
             // Đặt Access Token vào cookie
@@ -60,10 +58,12 @@ const login = (req, res, next) => {
 
             if (isPopup) {
                 return res.redirect(process.env.BACKEND_SSO + '/reload');
-            } else if (redirectUrl && redirectUrl !== 'null') {
-                return res.status(StatusCodes.OK).json({ statusCode: StatusCodes.OK, message: 'login success' });
             } else {
-                return res.redirect(process.env.BACKEND_SSO);
+                return res.status(StatusCodes.OK).json({
+                    statusCode: StatusCodes.OK,
+                    message: 'login success',
+                    data: { ...user, accessToken, refreshToken },
+                });
             }
         });
     })(req, res, next);
@@ -71,8 +71,9 @@ const login = (req, res, next) => {
 
 const loginSocial = async (req, res, next) => {
     try {
-        const redirectUrl = decodeURIComponent(req.query.state.split(',')[0]);
-        const isPopup = req.query.state.split(',')[1] === 'true' && true;
+        const state = JSON.parse(req.query.state);
+        const redirectUrl = decodeURIComponent(state.continue);
+        const isPopup = state.popup;
 
         const payload = {
             id: req.user.id,
@@ -118,18 +119,18 @@ const loginSocial = async (req, res, next) => {
 
 const signup = async (req, res, next) => {
     try {
-        const { data } = await authService.signup(req.body);
+        const data = await authService.signup(req.body);
 
         // Send email verify
-        const verificationLink = `${process.env.WEBSITE_DOMAIN}/verify-account?email=${data.email}$token=${data.code}`;
-        const customSubject = 'Account Verification - Please Confirm Your Email';
-        const htmlContent = `
-            <h3>Hello, ${data.email}!</h3>
-            <p>Thank you for signing up. To complete your account setup, please verify your email address.</p>
-            <p><a href="${verificationLink}">${verificationLink}</a></p>
-            <p>Click the link above to verify your account and start using our services.</p>
-            `;
-        await BrevoProvider.sendEmail(data.email, customSubject, htmlContent);
+        // const verificationLink = `${process.env.WEBSITE_DOMAIN}/verify-account?email=${data.email}$token=${data.code}`;
+        // const customSubject = 'Account Verification - Please Confirm Your Email';
+        // const htmlContent = `
+        //     <h3>Hello, ${data.email}!</h3>
+        //     <p>Thank you for signing up. To complete your account setup, please verify your email address.</p>
+        //     <p><a href="${verificationLink}">${verificationLink}</a></p>
+        //     <p>Click the link above to verify your account and start using our services.</p>
+        //     `;
+        // await BrevoProvider.sendEmail(data.email, customSubject, htmlContent);
 
         res.status(StatusCodes.CREATED).json({
             statusCode: StatusCodes.CREATED,
@@ -144,10 +145,10 @@ const signup = async (req, res, next) => {
 const logout = async (req, res, next) => {
     req.logout((err) => {
         if (err) return next(err);
-        // domain: process.env.COOKIE_DOMAIN
-        res.clearCookie('accessToken');
-        res.clearCookie('refreshToken');
-        res.clearCookie('connect.sid');
+        //
+        res.clearCookie('accessToken', { domain: process.env.COOKIE_DOMAIN });
+        res.clearCookie('refreshToken', { domain: process.env.COOKIE_DOMAIN });
+        res.clearCookie('connect.sid', { domain: process.env.COOKIE_DOMAIN });
         req.session.destroy();
 
         res.json({ statusCode: StatusCodes.OK, message: StatusCodes[StatusCodes.OK] });
@@ -176,7 +177,7 @@ const verifyServices = async (req, res, next) => {
 
 const refreshToken = async (req, res, next) => {
     try {
-        const refreshToken = req.cookies.refreshToken; // Lấy Refresh Token từ cookie
+        const refreshToken = req.cookies.refreshToken;
         if (!refreshToken) next(new ApiError(StatusCodes.UNAUTHORIZED), StatusCodes[StatusCodes.UNAUTHORIZED]);
 
         const user = await db.User.findOne({ where: { code: refreshToken }, raw: true });
@@ -231,7 +232,13 @@ const getCurrentUser = async (req, res, next) => {
                 email: req.user.email,
             },
             attributes: { exclude: ['password', 'type', 'code'] },
+            raw: true,
         });
+
+        if (user.require2FA) {
+            user.is2FAVerified = req.session.passport.user.is2FAVerified;
+            user.lastLogin = req.session.passport.user.lastLogin;
+        }
 
         return res.status(StatusCodes.OK).json({
             statusCode: StatusCodes.OK,
@@ -247,7 +254,7 @@ const verifyAccount = async (req, res, next) => {
     const { email, token } = req.body;
 
     try {
-        const resData = await authService.verifyAccount('LOCAL', email);
+        const resData = await authService.verifyAccount('LOCAL', email, token);
 
         return res.status(StatusCodes.OK).json({
             statusCode: StatusCodes.OK,
@@ -259,96 +266,126 @@ const verifyAccount = async (req, res, next) => {
     }
 };
 
-const generate2FaQrCode = async (req, res) => {
+const generate2FaQrCode = async (req, res, next) => {
     try {
-        let twoFactorSecretKeyValue = null;
+        let twoFactorSecretKey = await db.TwoFASecretKey.findOne({ where: { userId: req.user.id } });
+        if (!twoFactorSecretKey) {
+            twoFactorSecretKey = await db.TwoFASecretKey.create({
+                userId: req.user.id,
+                value: authenticator.generateSecret(),
+            });
+        }
 
-        // //         const twoFactorSecretKey = await twoFactorSecretKeyDB.findOne({ user_id: req.user.id });
-        // //         if (!twoFactorSecretKey) {
-        // //             const newTwoFactorSecretKey = await twoFactorSecretKeyDB.insert({
-        // //                 user_id: user._id,
-        // //                 value: authenticator.generateSecret(),
-        // //             });
-        // //
-        // //             twoFactorSecretKeyValue = newTwoFactorSecretKey.value;
-        // //         } else {
-        // //             twoFactorSecretKeyValue = twoFactorSecretKey.value;
-        // //         }
-        // //
-        // //         // tao OPT auth token
-        // //         const optAuthToken = authenticator.keyuri(user.username, '2fa - hoafn0730', twoFactorSecretKeyValue);
-        //
-        //         // tao anh qrcode
-        //         const qrCodeImageUrl = await QRCode.toDataURL(optAuthToken);
-        //
-        //         res.status(StatusCodes.OK).json({ data: qrCodeImageUrl });
+        // tao OPT auth token
+        const optAuthToken = authenticator.keyuri(req.user.username, '2fa-hoafn0730', twoFactorSecretKey.value);
+
+        // tao anh qrcode
+        const qrCodeImageUrl = await QRCode.toDataURL(optAuthToken);
+
+        res.status(StatusCodes.OK).json({ data: qrCodeImageUrl });
     } catch (error) {
-        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error);
+        next(error);
     }
 };
 
-const setup2FA = async (req, res, next) => {
-    const { email, type, token } = req.body;
-    console.log('🚀 ~ verifyAccount ~ token:', token);
-
+const setup2fa = async (req, res, next) => {
     try {
-        const resData = await authService.verifyAccount(type, email);
+        const twoFactorSecretKey = await db.TwoFASecretKey.findOne({ where: { userId: req.user.id } });
+        if (!twoFactorSecretKey) {
+            return next(new ApiError(StatusCodes.NOT_FOUND), 'Two Factor Secret Key not found!');
+        }
+
+        if (!req.body.otpToken) {
+            return next(new ApiError(StatusCodes.NOT_FOUND), 'Otp Token not found!');
+        }
+
+        const isValid = authenticator.verify({
+            token: req.body.otpToken,
+            secret: twoFactorSecretKey.value,
+        });
+
+        if (!isValid) {
+            return next(new ApiError(StatusCodes.NOT_ACCEPTABLE), 'Invalid opt token!');
+        }
+
+        const updatedUser = await db.User.update({ require2FA: true }, { where: { id: req.user.id }, returning: true });
+        req.session.passport.user.is2FAVerified = true;
 
         return res.status(StatusCodes.OK).json({
             statusCode: StatusCodes.OK,
-            message: resData.message || StatusCodes[StatusCodes.OK],
-            data: resData.data,
+            message: StatusCodes[StatusCodes.OK],
+            data: {
+                ...updatedUser,
+                is2FAVerified: req.session.passport.user.is2FAVerified,
+                lastLogin: req.session.passport.user.lastLogin,
+            },
         });
     } catch (error) {
         next(error);
     }
 };
 
-const verify2fa = async (req, res) => {
+const verify2fa = async (req, res, next) => {
     try {
-        //         const twoFactorSecretKey = await twoFactorSecretKeyDB.findOne({ user_id: req.user.id });
-        //         if (!twoFactorSecretKey) {
-        //             return res.status(StatusCodes.NOT_FOUND).json({ message: 'Two Factor Secret Key not found!' });
-        //         }
-        //
-        //         if (!req.body.otpToken) {
-        //             return res.status(StatusCodes.NOT_FOUND).json({ message: 'Otp Token not found!' });
-        //         }
-        //
-        //         const isValid = authenticator.verify({
-        //             token: req.body.otpToken,
-        //             secret: twoFactorSecretKey.value,
-        //         });
-        //
-        //         if (!isValid) {
-        //             return res.status(StatusCodes.NOT_ACCEPTABLE).json({ message: 'Invalid opt token!' });
-        //         }
-        //
-        //         // req.user
-        //
-        //         const updatedUserSession = await UserSessionDB.update(
-        //             { _id: user._id, device_id: req.headers['user-agent'] },
-        //             { $set: { is_2fa_verified: true } },
-        //             { returnUpdatedDocs: true },
-        //         );
-        //
-        //         UserSessionDB.compactDatafileAsync();
-        //
-        //         res.status(StatusCodes.OK).json({
-        //             ...pickUser(user),
-        //             is_2fa_verified: updatedUserSession.is_2fa_verified,
-        //             last_login: updatedUserSession.last_login,
-        //         });
+        const twoFactorSecretKey = await db.TwoFASecretKey.findOne({ where: { userId: req.user.id } });
+        if (!twoFactorSecretKey) {
+            return next(new ApiError(StatusCodes.NOT_FOUND), 'Two Factor Secret Key not found!');
+        }
+
+        if (!req.body.otpToken) {
+            return next(new ApiError(StatusCodes.NOT_FOUND), 'Otp Token not found!');
+        }
+
+        const isValid = authenticator.verify({
+            token: req.body.otpToken,
+            secret: twoFactorSecretKey.value,
+        });
+
+        if (!isValid) {
+            return next(new ApiError(StatusCodes.NOT_ACCEPTABLE), 'Invalid opt token!');
+        }
+
+        const user = await db.User.findOne({ where: { id: req.user.id } });
+        req.session.passport.user.is2FAVerified = true;
+
+        return res.status(StatusCodes.OK).json({
+            statusCode: StatusCodes.OK,
+            message: StatusCodes[StatusCodes.OK],
+            data: {
+                ...user,
+                is2FAVerified: req.session.passport.user.is2FAVerified,
+                lastLogin: req.session.passport.user.lastLogin,
+            },
+        });
     } catch (error) {
-        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error);
+        next(error);
     }
 };
 
-const disable2FA = async (req, res) => {
+const disable2fa = async (req, res, next) => {
     try {
-        //
+        const twoFactorSecretKey = await db.TwoFASecretKey.findOne({ where: { userId: req.user.id } });
+        if (!twoFactorSecretKey) {
+            return next(new ApiError(StatusCodes.NOT_FOUND), 'Two Factor Secret Key not found!');
+        }
+
+        const updatedUser = await db.User.update(
+            { require2FA: false },
+            { where: { id: req.user.id }, returning: true },
+        );
+        req.session.passport.user.is2FAVerified = false;
+
+        return res.status(StatusCodes.OK).json({
+            statusCode: StatusCodes.OK,
+            message: StatusCodes[StatusCodes.OK],
+            data: {
+                ...updatedUser,
+                is2FAVerified: req.session.passport.user.is2FAVerified,
+                lastLogin: req.session.passport.user.lastLogin,
+            },
+        });
     } catch (error) {
-        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error);
+        next(error);
     }
 };
 
@@ -362,7 +399,7 @@ module.exports = {
     getCurrentUser,
     verifyAccount,
     generate2FaQrCode,
-    setup2FA,
+    setup2fa,
     verify2fa,
-    disable2FA,
+    disable2fa,
 };
